@@ -6,7 +6,7 @@ import sklearn.neighbors
 # Load the data
 oecd_bli= pd.read_csv("oecd_bli_2015.csv", thousands =',')
 gdp_per_capita= pd.read_csv("gdp_per_capita.csv", thousands=',',delimiter='\t',encoding='latin1', na_values="n/a")
-
+# Redefining dataset features
 def prepare_country_stats(oecd_bli, gdp_per_capita):
     oecd_bli = oecd_bli[oecd_bli["INEQUALITY"]=="TOT"]
     oecd_bli = oecd_bli.pivot(index="Country", columns="Indicator", values="Value")
@@ -22,7 +22,7 @@ def prepare_country_stats(oecd_bli, gdp_per_capita):
 country_stats= prepare_country_stats(oecd_bli, gdp_per_capita)
 # Visualize the data
 country_stats.plot(kind ='scatter',x='GDP per capita', y='Life satisfaction')
-# selecting a model
+# selecting a model for linear regression and KNeighboursRegressor
 model = sklearn.linear_model.LinearRegression()
 model2= sklearn.neighbors.KNeighborsRegressor(n_neighbors = 3)
 #Train a model
