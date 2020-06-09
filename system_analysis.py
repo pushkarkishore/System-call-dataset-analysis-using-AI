@@ -1,4 +1,8 @@
 import sklearn
+import tensorflow as tf
+from tensorflow import keras
+tf.__version__
+keras.__version__
 import pandas as pd
 import sklearn.neighbors
 import matplotlib.pyplot as plt
@@ -9,6 +13,7 @@ import os
 import hashlib
 import matplotlib as mpl
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import StratifiedShuffleSplit
 from pandas.plotting import scatter_matrix
 from sklearn.metrics import mean_squared_error
@@ -30,6 +35,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
+from sklearn.linear_model import Perceptron
 def display_scores(scores):
     print("Scores:", scores)
     print("Mean:", scores.mean())
@@ -67,7 +73,7 @@ housing = strat_train_set.drop("Types", axis=1)
 some_digit= housing.iloc[0]
 some_digit_image = some_digit.reshape(62,62)
 housing_labels = strat_train_set["Types"].copy()
-housing_labels_0 = (housing_labels==0)
+housing_labels_0 = (housing_labels==0) # if classification is required
 # transformation pipelines
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -75,8 +81,15 @@ num_pipeline = Pipeline([
         
         ('std_scaler', StandardScaler())
     ])
+num_pipelines = Pipeline([
+        
+        ('min_scaler', MinMaxScaler())
+    ]) # neural networks dataset
 housing.drop(housing.columns[[0,1]], axis=1, inplace=True)
 housing_prepared = num_pipeline.fit_transform(housing)
+housing_prepared = pd.DataFrame(housing_prepared)
+housing_prepared_nn = num_pipelines.fit_transform(housing)# neural networks
+housing_prepared_nn = pd.DataFrame(housing_prepared_nn)# neural networks
 # Visualize the data
 oecd_bli.plot(kind='scatter', x="666 170 148", y="Types")
 # Select a linear regression model
@@ -120,6 +133,9 @@ forest_clf = RandomForestClassifier(random_state=42)
 y_probas_forest = cross_val_predict(forest_clf, housing, housing_labels_0, cv=3,
                                     method="predict_proba")
 y_scores_forest= y_probas_forest[:, 1]
+# select a perceptron
+per_clf = Perceptron()
+per_clf.fit(housing,housing_labels_0)
 # Grid search
 param_grid = [
     # try 12 (3×4) combinations of hyperparameters
@@ -142,6 +158,7 @@ y_test = strat_test_set["Types"].copy()
 y_test_5= (y_test==0)
 X_test.drop(X_test.columns[[0,1]], axis=1, inplace=True)
 final_predictions = final_model.predict(X_test)
+y_pred = per_clf.predict(X_test) # prediction for perceptron
 final_mse = mean_squared_error(y_test, final_predictions)
 final_rmse = np.sqrt(final_mse)
 # performance evaluation using confusion matrix
@@ -154,6 +171,7 @@ plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
 threshold_90_precision= thresholds[np.argmax(precisions >= 0.95)]
 y_train_pred_90 = (y_scores >= threshold_90_precision)
 confusion_matrix(housing_labels_0,y_train_pred_90)
+confusion_matrix(y_pred,y_test_5)# for perceptron
 precision_score(housing_labels_0,y_train_pred_90)
 recall_score(housing_labels_0,y_train_pred)
 f1_score(housing_labels_0,y_train_pred)
@@ -170,22 +188,122 @@ roc_auc_score(housing_labels_0, y_scores) # for random forest
 #  muticlass classification
 api_calls = pd.read_csv('C:\\Users\\pshkr\\Downloads\\call_2\\mal-api-2019 (3)\\data_2_api.csv')
 train_set, test_set = train_test_split(api_calls, test_size=0.2, random_state=42)
-
 split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
 for train_index, test_index in split.split(api_calls,api_calls["Types"]):
     strat_train_set = api_calls.loc[train_index]
     strat_test_set = api_calls.loc[test_index]
 housing = strat_train_set.copy()    
 housing = strat_train_set.drop("Types", axis=1) 
+avast = housing_prepared_nn.values.reshape((6476, 109, 109))# neural networks
 housing_labels = strat_train_set["Types"].copy()
 X_test = strat_test_set.drop("Types", axis=1)
+housing_prepared_test_reg = num_pipeline.fit_transform(X_test)# neural networks
+housing_prepared_test_reg = pd.DataFrame(housing_prepared_test_reg)# neural networks
+housing_prepared_test = num_pipelines.fit_transform(X_test)# neural networks
+housing_prepared_test = pd.DataFrame(housing_prepared_test)# neural networks
+avast_test = housing_prepared_test.values.reshape((1620, 109, 109))# neural networks
 y_test = strat_test_set["Types"].copy()
+# sequential classification API neural network
+model = keras.models.Sequential()
+model.add(keras.layers.Flatten(input_shape=[109,109]))
+model.add(keras.layers.Dense(300, activation="relu"))
+model.add(keras.layers.Dense(100, activation="relu"))
+model.add(keras.layers.Dense(16, activation="softmax"))
+# sequential regression API neural network
+model = keras.models.Sequential([
+    keras.layers.Dense(30, activation="relu", input_shape=housing_prepared_nn.shape[1:]),
+    keras.layers.Dense(1)
+]) 
+model.compile(loss="mean_squared_error", optimizer="sgd")
+history = model.fit(housing_prepared_nn, housing_labels, epochs=20, validation_split=0.1 )
+model.evaluate(housing_prepared_test, y_test)
+y_pred = model.predict(housing_prepared_test)
+# building complex models using function API
+input_ = keras.layers.Input(shape=housing_prepared_nn.shape[1:])
+hidden1 = keras.layers.Dense(30, activation="relu")(input_)
+hidden2 = keras.layers.Dense(30, activation="relu")(hidden1)
+concat = keras.layers.concatenate([input_, hidden2])
+output = keras.layers.Dense(1)(concat)
+model = keras.models.Model(inputs=[input_], outputs=[output])
+model.compile(loss="mean_squared_error", optimizer="sgd")
+history = model.fit(housing_prepared_nn, housing_labels, epochs=20, validation_split=0.1)
+model.evaluate(housing_prepared_test, y_test)
+y_pred = model.predict(housing_prepared_test)
+# building complex models using function API with 2 inputs
+input_A = keras.layers.Input(shape=[1800], name="wide_input")
+input_B = keras.layers.Input(shape=[2126], name="deep_input")
+hidden1 = keras.layers.Dense(30, activation="relu")(input_B)
+hidden2 = keras.layers.Dense(30, activation="relu")(hidden1)
+concat = keras.layers.concatenate([input_A, hidden2])
+output = keras.layers.Dense(1, name="output")(concat)
+model = keras.models.Model(inputs=[input_A, input_B], outputs=[output])
+model.compile(loss="mse", optimizer=keras.optimizers.SGD())
+X_train_A, X_train_B = housing_prepared_nn.iloc[:, :1800], housing_prepared_nn.iloc[:, 1801:]
+X_test_A, X_test_B = housing_prepared_test.iloc[:, :1800], housing_prepared_test.iloc[:, 1801:]
+history = model.fit((X_train_A, X_train_B), housing_labels, epochs=20, validation_split=0.1)
+model.evaluate((X_test_A, X_test_B), y_test)
+y_pred = model.predict((X_test_A,X_test_B))
+# using subclassing api to build dynamic models
+class WideAndDeepModel(keras.models.Model):
+    def __init__(self, units=30, activation="relu", **kwargs):
+        super().__init__(**kwargs)
+        self.hidden1 = keras.layers.Dense(units, activation=activation)
+        self.hidden2 = keras.layers.Dense(units, activation=activation)
+        self.main_output = keras.layers.Dense(1)
+        self.aux_output = keras.layers.Dense(1)
+        
+    def call(self, inputs):
+        input_A, input_B = inputs
+        hidden1 = self.hidden1(input_B)
+        hidden2 = self.hidden2(hidden1)
+        concat = keras.layers.concatenate([input_A, hidden2])
+        main_output = self.main_output(concat)
+        aux_output = self.aux_output(hidden2)
+        return main_output, aux_output
+model = WideAndDeepModel(30, activation="relu")
+# model summary for neural network 
+model.summary()
+model.layers
+hidden1 = model.layers[1]
+hidden1.name
+model.get_layer(hidden1.name) is hidden1
+weights, biases = hidden1.get_weights()
+weights
+weights.shape
+biases
+biases.shape
+# compile model for sequential classification neural network
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer="sgd",
+              metrics=["accuracy"])
+# train and evaluate the sequential classification neural network model
+history = model.fit(avast, housing_labels, epochs=80,
+                    validation_split=0.1)
+
+model.evaluate(avast_test,y_test)
+y_pred = model.predict_classes(avast_test)
+# SVM
 svm_clf= SVC()
 svm_clf.fit(housing,housing_labels)
 svm_clf.predict(X_test)
+# One vs Rest classifier
 ovr_clf = OneVsRestClassifier(SVC())
 ovr_clf.fit(housing,housing_labels)
 predictions= ovr_clf.predict(X_test)
 y_train_pred= cross_val_predict(sgd_clf, housing, housing_labels, cv=3)
 conf_mx = confusion_matrix(housing_labels, y_train_pred)
+# plotting results
 plt.matshow(conf_mx, cmap=plt.cm.gray)
+pd.DataFrame(history.history).plot(figsize=(8, 5))
+plt.grid(True)
+plt.gca().set_ylim(0, 1)
+plt.show()
+# using callbacks to save long training model
+checkpoint_cb = keras.callbacks.ModelCheckpoint("my_keras_model.h5",save_best_only=True)
+early_stopping_cb = keras.callbacks.EarlyStopping(patience=10,restore_best_weights=True)
+history = model.fit(housing_prepared_nn, housing_labels, epochs=100, validation_split=0.1, callbacks=[checkpoint_cb, early_stopping_cb])
+
+
+
+
+
