@@ -36,10 +36,18 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
 from sklearn.linear_model import Perceptron
+from scipy.stats import reciprocal
+from sklearn.model_selection import RandomizedSearchCV
+import os
+root_logdir = os.path.join(os.curdir, "my_logs")
 def display_scores(scores):
     print("Scores:", scores)
     print("Mean:", scores.mean())
     print("Standard deviation:", scores.std())
+def get_run_logdir():
+    import time
+    run_id = time.strftime("run_%Y_%m_%d-%H_%M_%S")
+    return os.path.join(root_logdir, run_id)
 # To plot pretty figures directly within spyder
 %matplotlib inline
 import matplotlib as mpl
@@ -279,7 +287,6 @@ model.compile(loss="sparse_categorical_crossentropy",
 # train and evaluate the sequential classification neural network model
 history = model.fit(avast, housing_labels, epochs=80,
                     validation_split=0.1)
-
 model.evaluate(avast_test,y_test)
 y_pred = model.predict_classes(avast_test)
 # SVM
@@ -302,8 +309,33 @@ plt.show()
 checkpoint_cb = keras.callbacks.ModelCheckpoint("my_keras_model.h5",save_best_only=True)
 early_stopping_cb = keras.callbacks.EarlyStopping(patience=10,restore_best_weights=True)
 history = model.fit(housing_prepared_nn, housing_labels, epochs=100, validation_split=0.1, callbacks=[checkpoint_cb, early_stopping_cb])
-
-
-
-
-
+# Using tensorboard for visualization
+run_logdir = get_run_logdir()
+tensorboard_cb = keras.callbacks.TensorBoard(run_logdir)
+history = model.fit(housing_prepared_nn, housing_labels, epochs=30, validation_split=0.1, callbacks=[tensorboard_cb])
+# fine tuning neural netowrk hyperparameter
+def build_model(n_neurons_1=300, n_neurons_2=100, learning_rate=3e-3, input_shape=[109,109]):
+    model = keras.models.Sequential()
+    model.add(keras.layers.Flatten(input_shape=input_shape))
+    model.add(keras.layers.Dense(n_neurons_1, activation="relu"))
+    model.add(keras.layers.Dense(n_neurons_2, activation="relu"))
+    model.add(keras.layers.Dense(16, activation="softmax"))
+    optimizer = keras.optimizers.SGD(lr=learning_rate)
+    model.compile(loss="sparse_categorical_crossentropy", optimizer=optimizer,  metrics = ["accuracy"])
+   
+    return model
+keras_claf = keras.wrappers.scikit_learn.KerasClassifier(build_model)
+keras_claf.fit(avast,housing_labels,epochs=100,validation_split=0.1,callbacks=[keras.callbacks.EarlyStopping(patience=10)] )
+mse_test = keras_claf.score(avast_test,y_test)
+y_pred = keras_claf.predict(avast_test)
+param_distribs = {
+    "n_neurons_1": np.arange(200, 400),
+    "n_neurons_2": np.arange(50, 200),
+    "learning_rate": reciprocal(3e-4, 3e-2),
+}
+rnd_search_cv = RandomizedSearchCV(keras_claf, param_distribs, n_iter=10, cv=3)
+rnd_search_cv.fit(avast, housing_labels, epochs=100,
+                  validation_split=0.1,
+                  callbacks=[keras.callbacks.EarlyStopping(patience=10)])
+rnd_search_cv.best_params_
+rnd_search_cv.best_score_
