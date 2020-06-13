@@ -194,7 +194,7 @@ plot_roc_curve(fpr_forest, tpr_forest, "Random Forest") # for random forest
 roc_auc_score(housing_labels_0, y_scores)
 roc_auc_score(housing_labels_0, y_scores) # for random forest
 #  muticlass classification
-api_calls = pd.read_csv('C:\\Users\\pshkr\\Downloads\\call_2\\mal-api-2019 (3)\\data_2_api.csv')
+api_calls = pd.read_csv('C:\\Users\\pshkr\\Downloads\\call_2\\mal-api-2019 (3)\\data_nn.csv')
 train_set, test_set = train_test_split(api_calls, test_size=0.2, random_state=42)
 split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
 for train_index, test_index in split.split(api_calls,api_calls["Types"]):
@@ -202,21 +202,21 @@ for train_index, test_index in split.split(api_calls,api_calls["Types"]):
     strat_test_set = api_calls.loc[test_index]
 housing = strat_train_set.copy()    
 housing = strat_train_set.drop("Types", axis=1) 
-avast = housing_prepared_nn.values.reshape((6476, 109, 109))# neural networks
+avast = housing_prepared_nn.values.reshape((5685, 109, 109))# neural networks
 housing_labels = strat_train_set["Types"].copy()
 X_test = strat_test_set.drop("Types", axis=1)
 housing_prepared_test_reg = num_pipeline.fit_transform(X_test)# neural networks
 housing_prepared_test_reg = pd.DataFrame(housing_prepared_test_reg)# neural networks
 housing_prepared_test = num_pipelines.fit_transform(X_test)# neural networks
 housing_prepared_test = pd.DataFrame(housing_prepared_test)# neural networks
-avast_test = housing_prepared_test.values.reshape((1620, 109, 109))# neural networks
+avast_test = housing_prepared_test.values.reshape((1422, 109, 109))# neural networks
 y_test = strat_test_set["Types"].copy()
 # sequential classification API neural network
 model = keras.models.Sequential()
 model.add(keras.layers.Flatten(input_shape=[109,109]))
 model.add(keras.layers.Dense(300, activation="relu"))
 model.add(keras.layers.Dense(100, activation="relu"))
-model.add(keras.layers.Dense(16, activation="softmax"))
+model.add(keras.layers.Dense(9, activation="softmax"))
 # sequential regression API neural network
 model = keras.models.Sequential([
     keras.layers.Dense(30, activation="relu", input_shape=housing_prepared_nn.shape[1:]),
@@ -285,7 +285,7 @@ model.compile(loss="sparse_categorical_crossentropy",
               optimizer="sgd",
               metrics=["accuracy"])
 # train and evaluate the sequential classification neural network model
-history = model.fit(avast, housing_labels, epochs=80,
+history = model.fit(avast, housing_labels, epochs=100,
                     validation_split=0.1)
 model.evaluate(avast_test,y_test)
 y_pred = model.predict_classes(avast_test)
@@ -339,3 +339,436 @@ rnd_search_cv.fit(avast, housing_labels, epochs=100,
                   callbacks=[keras.callbacks.EarlyStopping(patience=10)])
 rnd_search_cv.best_params_
 rnd_search_cv.best_score_
+# Glorot and He initialization
+keras.layers.Dense(10, activation="relu", kernel_initializer="he_normal")
+he_avg_int = keras.initializers.VarianceScaling(scale=2., mode='fan_avg',
+                                          distribution='uniform')
+keras.layers.Dense(10, activation="relu", kernel_initializer=he_avg_int)
+# Leaky Relu
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.LeakyReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.LeakyReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"])
+history = model.fit(avast,housing_labels, epochs=100,
+                    validation_split=0.1)
+model.evaluate(avast_test,y_test)
+# PRELU
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"])
+history = model.fit(avast,housing_labels, epochs=200,
+                    validation_split=0.1,callbacks=[tensorboard_cb])
+model.evaluate(avast_test,y_test)
+#SRELU
+model = keras.models.Sequential()
+model.add(keras.layers.Flatten(input_shape=[109, 109]))
+model.add(keras.layers.Dense(300, activation="selu",
+                             kernel_initializer="lecun_normal"))
+for layer in range(99):
+    model.add(keras.layers.Dense(100, activation="selu",
+                                 kernel_initializer="lecun_normal"))
+model.add(keras.layers.Dense(10, activation="softmax"))
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100,validation_split=0.1)
+model.evaluate(avast_test,y_test)
+# Batch normalization
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.BatchNormalization(),
+    keras.layers.Dense(300, activation="relu"),
+    keras.layers.BatchNormalization(),
+    keras.layers.Dense(100, activation="relu"),
+    keras.layers.BatchNormalization(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.summary()
+bn1 = model.layers[1]
+[(var.name, var.trainable) for var in bn1.variables]
+model.layers[1].updates
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.BatchNormalization(),
+    keras.layers.Dense(300, use_bias=False),
+    keras.layers.BatchNormalization(),
+    keras.layers.Activation("relu"),
+    keras.layers.Dense(100, use_bias=False),
+    keras.layers.BatchNormalization(),
+    keras.layers.Activation("relu"),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100,validation_split=0.1)
+model.evaluate(avast_test,y_test)     
+# REUSING PRETRAINED LAYERS
+def split_dataset(X, y):
+    y_5_or_6 = (y == 5) | (y == 6) # sandals or shirts
+    y_A = y[~y_5_or_6]
+    y_A[y_A > 6] -= 2 # class indices 7, 8, 9 should be moved to 5, 6, 7
+    y_B = (y[y_5_or_6] == 6).astype(np.float32) # binary classification task: is it a shirt (class 6)?
+    return ((X[~y_5_or_6], y_A),
+            (X[y_5_or_6], y_B))
+(X_train_A, y_train_A), (X_train_B, y_train_B) = split_dataset(avast, housing_labels)
+(X_test_A, y_test_A), (X_test_B, y_test_B) = split_dataset(avast_test, y_test)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+                optimizer=keras.optimizers.SGD(),
+                metrics=["accuracy"])
+history = model.fit(X_train_A, y_train_A, epochs=100,
+                    validation_split=0.1)
+model.save("my_model_A.h5")
+model.evaluate(X_test_A,y_test_A)         
+model_B = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(1, activation="sigmoid")
+])
+model_B.compile(loss="binary_crossentropy",
+                optimizer=keras.optimizers.SGD(),
+                metrics=["accuracy"])
+history = model_B.fit(X_train_B, y_train_B, epochs=100,validation_split=0.1)
+model_B.evaluate(X_test_B,y_test_B)                      
+model_A = keras.models.load_model("my_model_A.h5")    
+model_B_on_A = keras.models.Sequential(model_A.layers[:-1])         
+model_B_on_A.add(keras.layers.Dense(1, activation="sigmoid"))
+model_A_clone = keras.models.clone_model(model_A)
+model_A_clone.set_weights(model_A.get_weights())
+for layer in model_B_on_A.layers[:-1]:
+    layer.trainable = False
+
+model_B_on_A.compile(loss="binary_crossentropy",
+                     optimizer=keras.optimizers.SGD(),
+                     metrics=["accuracy"])
+history = model_B_on_A.fit(X_train_B, y_train_B, epochs=100,
+                           validation_split=0.1)
+for layer in model_B_on_A.layers[:-1]:
+    layer.trainable = True
+model_B_on_A.compile(loss="binary_crossentropy",
+                     optimizer=keras.optimizers.SGD(lr=1e-3),
+                     metrics=["accuracy"])    
+history = model_B_on_A.fit(X_train_B, y_train_B, epochs=100,
+                           validation_split=0.1)
+model_B.evaluate(X_test_B, y_test_B)
+model_B_on_A.evaluate(X_test_B, y_test_B)
+# momentum optimization
+optimizer= keras.optimizers.SGD(lr=0.001, momentum=0.9)
+#Nesterov accelerated Gradient
+optimizer = keras.optimizers.SGD(lr=0.001, momentum=0.9, nesterov=True)
+#Adagrad
+optimizer = keras.optimizers.Adagrad(lr=0.001)
+#RMSProp
+optimizer = keras.optimizers.RMSprop(lr=0.001, rho=0.9)
+# Adam optimization
+optimizer = keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999)
+#Adamax
+optimizer = keras.optimizers.Adamax(lr=0.001, beta_1=0.9, beta_2=0.999)
+#nadam optimization
+optimizer = keras.optimizers.Nadam(lr=0.001, beta_1=0.9, beta_2=0.999)
+# POWER SCHEDULING
+optimizer = keras.optimizers.SGD(lr=0.01, decay=1e-4)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=optimizer,
+              metrics=["accuracy"])
+history = model.fit(avast,housing_labels, epochs=100,
+                    validation_split=0.1)
+model.evaluate(avast_test,y_test)
+# Exponential Scheduling
+def exponential_decay_fn(epoch):
+    return 0.01 * 0.1**(epoch / 20)
+def exponential_decay(lr0, s):
+    def exponential_decay_fn(epoch):
+        return lr0 * 0.1**(epoch / s)
+    return exponential_decay_fn
+exponential_decay_fn = exponential_decay(lr0=0.01, s=20)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"])
+n_epochs=100
+lr_scheduler = keras.callbacks.LearningRateScheduler(exponential_decay_fn)
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                   validation_split=0.1,
+                    callbacks=[lr_scheduler])
+model.evaluate(avast_test,y_test)
+# Piecewise constant scheduling
+def piecewise_constant_fn(epoch):
+    if epoch < 5:
+        return 0.01
+    elif epoch < 15:
+        return 0.005
+    else:
+        return 0.001
+def piecewise_constant(boundaries, values):
+    boundaries = np.array([0] + boundaries)
+    values = np.array(values)
+    def piecewise_constant_fn(epoch):
+        return values[np.argmax(boundaries > epoch) - 1]
+    return piecewise_constant_fn
+
+piecewise_constant_fn = piecewise_constant([5, 15], [0.01, 0.005, 0.001])   
+lr_scheduler = keras.callbacks.LearningRateScheduler(piecewise_constant_fn)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"]) 
+n_epochs=100    
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                   validation_split=0.1,
+                    callbacks=[lr_scheduler])
+model.evaluate(avast_test,y_test)
+# performance scheduling
+lr_scheduler = keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=5)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+optimizer = keras.optimizers.SGD(lr=0.02, momentum=0.9)
+model.compile(loss="sparse_categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
+n_epochs = 100
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                   validation_split=0.1,
+                    callbacks=[lr_scheduler])
+model.evaluate(avast_test,y_test)
+# tf.keras scheduler
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+s = 20 * len(avast) // 32 # number of steps in 20 epochs (batch size = 32)
+learning_rate = keras.optimizers.schedules.ExponentialDecay(0.01, s, 0.1)
+optimizer = keras.optimizers.SGD(learning_rate)
+model.compile(loss="sparse_categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
+n_epochs = 100
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                   validation_split=0.1
+                    )
+model.evaluate(avast_test,y_test)
+# 1-cycle scheduling
+K = keras.backend
+class ExponentialLearningRate(keras.callbacks.Callback):
+    def __init__(self, factor):
+        self.factor = factor
+        self.rates = []
+        self.losses = []
+    def on_batch_end(self, batch, logs):
+        self.rates.append(K.get_value(self.model.optimizer.lr))
+        self.losses.append(logs["loss"])
+        K.set_value(self.model.optimizer.lr, self.model.optimizer.lr * self.factor)
+
+def find_learning_rate(model, X, y, epochs=1, batch_size=32, min_rate=10**-5, max_rate=10):
+    init_weights = model.get_weights()
+    iterations = len(X) // batch_size * epochs
+    factor = np.exp(np.log(max_rate / min_rate) / iterations)
+    init_lr = K.get_value(model.optimizer.lr)
+    K.set_value(model.optimizer.lr, min_rate)
+    exp_lr = ExponentialLearningRate(factor)
+    history = model.fit(X, y, epochs=epochs, batch_size=batch_size,
+                        callbacks=[exp_lr])
+    K.set_value(model.optimizer.lr, init_lr)
+    model.set_weights(init_weights)
+    return exp_lr.rates, exp_lr.losses
+
+def plot_lr_vs_loss(rates, losses):
+    plt.plot(rates, losses)
+    plt.gca().set_xscale('log')
+    plt.hlines(min(losses), min(rates), max(rates))
+    plt.axis([min(rates), max(rates), min(losses), (losses[0] + min(losses)) / 2])
+    plt.xlabel("Learning rate")
+    plt.ylabel("Loss")
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+]) 
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(lr=1e-3),
+              metrics=["accuracy"]) 
+batch_size = 128
+rates, losses = find_learning_rate(model, avast, housing_labels, epochs=100, batch_size=batch_size)
+plot_lr_vs_loss(rates, losses)  
+class OneCycleScheduler(keras.callbacks.Callback):
+    def __init__(self, iterations, max_rate, start_rate=None,
+                 last_iterations=None, last_rate=None):
+        self.iterations = iterations
+        self.max_rate = max_rate
+        self.start_rate = start_rate or max_rate / 10
+        self.last_iterations = last_iterations or iterations // 10 + 1
+        self.half_iteration = (iterations - self.last_iterations) // 2
+        self.last_rate = last_rate or self.start_rate / 1000
+        self.iteration = 0
+    def _interpolate(self, iter1, iter2, rate1, rate2):
+        return ((rate2 - rate1) * (self.iteration - iter1)
+                / (iter2 - iter1) + rate1)
+    def on_batch_begin(self, batch, logs):
+        if self.iteration < self.half_iteration:
+            rate = self._interpolate(0, self.half_iteration, self.start_rate, self.max_rate)
+        elif self.iteration < 2 * self.half_iteration:
+            rate = self._interpolate(self.half_iteration, 2 * self.half_iteration,
+                                     self.max_rate, self.start_rate)
+        else:
+            rate = self._interpolate(2 * self.half_iteration, self.iterations,
+                                     self.start_rate, self.last_rate)
+            rate = max(rate, self.last_rate)
+        self.iteration += 1
+        K.set_value(self.model.optimizer.lr, rate)
+n_epochs = 100
+onecycle = OneCycleScheduler(len(avast) // batch_size * n_epochs, max_rate=0.05)
+history = model.fit(avast, housing_labels, epochs=n_epochs, batch_size=batch_size,
+                    validation_split=0.1,
+                    callbacks=[onecycle])        
+model.evaluate(avast_test,y_test)
+
+# l1 and l2 regularization
+layer = keras.layers.Dense(100, activation="elu",
+                           kernel_initializer="he_normal",
+                           kernel_regularizer=keras.regularizers.l2(0.01))
+from functools import partial
+RegularizedDense = partial(keras.layers.Dense,
+                           activation="elu",
+                           kernel_initializer="he_normal",
+                           kernel_regularizer=keras.regularizers.l2(0.01))
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    RegularizedDense(300),
+    RegularizedDense(100),
+    RegularizedDense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy", optimizer=keras.optimizers.SGD(), metrics=["accuracy"])
+n_epochs = 100
+history = model.fit(avast,housing_labels, epochs=n_epochs,
+                   validation_split=0.1)
+model.evaluate(avast_test,y_test)
+# Dropout
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dropout(rate=0.2),
+    keras.layers.Dense(300, activation="elu", kernel_initializer="he_normal"),
+    keras.layers.Dropout(rate=0.2),
+    keras.layers.Dense(100, activation="elu", kernel_initializer="he_normal"),
+    keras.layers.Dropout(rate=0.2),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy", optimizer=keras.optimizers.SGD(), metrics=["accuracy"])
+n_epochs = 100
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                    validation_split=0.1)
+model.evaluate(avast_test,y_test)
+# alpha dropout
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.AlphaDropout(rate=0.2),
+    keras.layers.Dense(300, activation="selu", kernel_initializer="lecun_normal"),
+    keras.layers.AlphaDropout(rate=0.2),
+    keras.layers.Dense(100, activation="selu", kernel_initializer="lecun_normal"),
+    keras.layers.AlphaDropout(rate=0.2),
+    keras.layers.Dense(10, activation="softmax")
+])
+optimizer = keras.optimizers.SGD(lr=0.01, momentum=0.9, nesterov=True)
+model.compile(loss="sparse_categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
+n_epochs = 100
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                    validation_split=0.1)
+y_pred=model.evaluate(avast_test,y_test)
+# mc dropout
+y_probas = np.stack([model(avast, training=True)
+                     for sample in range(100)])
+y_proba = y_probas.mean(axis=0)
+y_std = y_probas.std(axis=0)
+np.round(model.predict(avast_test[:1]), 2)
+np.round(y_probas[:, :1], 2)
+np.round(y_proba[:1], 2)
+model.evaluate(avast_test,y_test)
+class MCDropout(keras.layers.Dropout):
+    def call(self, inputs):
+        return super().call(inputs, training=True)
+
+class MCAlphaDropout(keras.layers.AlphaDropout):
+    def call(self, inputs):
+        return super().call(inputs, training=True)
+mc_model = keras.models.Sequential([
+    MCAlphaDropout(layer.rate) if isinstance(layer, keras.layers.AlphaDropout) else layer
+    for layer in model.layers
+])    
+optimizer = keras.optimizers.SGD(lr=0.01, momentum=0.9, nesterov=True)
+mc_model.compile(loss="sparse_categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
+mc_model.set_weights(model.get_weights())
+history = mc_model.fit(avast, housing_labels, epochs=100,
+                    validation_split=0.1,callbacks=[tensorboard_cb])
+# max norm
+layer = keras.layers.Dense(100, activation="selu", kernel_initializer="lecun_normal",
+                           kernel_constraint=keras.constraints.max_norm(1.))
+MaxNormDense = partial(keras.layers.Dense,
+                       activation="selu", kernel_initializer="lecun_normal",
+                       kernel_constraint=keras.constraints.max_norm(1.))
+
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    MaxNormDense(300),
+    MaxNormDense(100),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam", metrics=["accuracy"])
+n_epochs = 100
+history = model.fit(avast, housing_labels, epochs=n_epochs,
+                     validation_split=0.1,callbacks=[tensorboard_cb])
