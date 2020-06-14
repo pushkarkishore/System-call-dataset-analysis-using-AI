@@ -772,3 +772,305 @@ model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam", metrics
 n_epochs = 100
 history = model.fit(avast, housing_labels, epochs=n_epochs,
                      validation_split=0.1,callbacks=[tensorboard_cb])
+# Tensors and Operations
+t= tf.constant([[1., 2., 3.], [4., 5., 6.]]) # matrix
+tf.constant(42) # scalar
+t.shape
+t.dtype
+# tensor indexing
+t[:, 1:]
+t[..., 1, tf.newaxis]
+# tensor operations
+t + 10
+tf.square(t)
+t @ tf.transpose(t)
+# Using keras.backend
+from tensorflow import keras
+K = keras.backend
+K.square(K.transpose(t)) + 10
+# similarity with numpy
+a = np.array([2., 4., 5.])
+tf.constant(a)
+t.numpy()
+np.array(t)
+tf.square(a)
+np.square(t)
+# conflicting types
+t2 = tf.constant(40., dtype=tf.float64)
+tf.constant(2.0) + tf.cast(t2, tf.float32)
+# variables
+v = tf.Variable([[1., 2., 3.], [4., 5., 6.]])
+v.assign(2 * v)
+v[0, 1].assign(42)
+v[:, 2].assign([0., 1.])
+v.scatter_nd_update(indices=[[0, 0], [1, 2]],
+                    updates=[100., 200.])
+# sparse tensors
+s = tf.SparseTensor(indices=[[0, 1], [1, 0], [2, 3]],
+                    values=[1., 2., 3.],
+                    dense_shape=[3, 4])
+print(s)
+tf.sparse.to_dense(s)
+#Tensor Arrays
+array = tf.TensorArray(dtype=tf.float32, size=3)
+array = array.write(0, tf.constant([1., 2.]))
+array = array.write(1, tf.constant([3., 10.]))
+array = array.write(2, tf.constant([5., 7.]))
+array.read(1)
+array.stack()
+#Ragged Tensors
+p = tf.constant(["Café", "Coffee", "caffè", "break"])
+tf.strings.length(p, unit="UTF8_CHAR")
+r = tf.strings.unicode_decode(p, "UTF8")
+print(r)
+r2 = tf.ragged.constant([[65, 66], [], [67]])
+print(tf.concat([r, r2], axis=0))
+# Custom Loss Functions
+def huber_fn(y_true, y_pred):
+    error = y_true - y_pred
+    is_small_error = tf.abs(error) < 1
+    squared_loss = tf.square(error) / 2
+    linear_loss  = tf.abs(error) - 0.5
+    return tf.where(is_small_error, squared_loss, linear_loss)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])
+model.compile(loss=huber_fn, optimizer=optimizer,metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=10,
+                     validation_split=0.1,callbacks=[tensorboard_cb])
+model.evaluate(avast_test,y_test)
+# saving and loading custom component model
+class HuberLoss(keras.losses.Loss):
+    def __init__(self, threshold=1.0, **kwargs):
+        self.threshold = threshold
+        super().__init__(**kwargs)
+    def call(self, y_true, y_pred):
+        error = y_true - y_pred
+        is_small_error = tf.abs(error) < self.threshold
+        squared_loss = tf.square(error) / 2
+        linear_loss  = self.threshold * tf.abs(error) - self.threshold**2 / 2
+        return tf.where(is_small_error, squared_loss, linear_loss)
+    def get_config(self):
+        base_config = super().get_config()
+        return {**base_config, "threshold": self.threshold}
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])    
+model.compile(loss=HuberLoss(2.), optimizer="nadam", metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=10,
+                     validation_split=0.1,callbacks=[tensorboard_cb])
+model.save("my_model_with_a_custom_loss_class.h5")
+model = keras.models.load_model("my_model_with_a_custom_loss_class.h5",custom_objects={"HuberLoss": HuberLoss})
+history = model.fit(avast, housing_labels, epochs=10,
+                     validation_split=0.1,callbacks=[tensorboard_cb])   
+# other custom functions
+def my_softplus(z): # return value is just tf.nn.softplus(z)
+    return tf.math.log(tf.exp(z) + 1.0)
+def my_glorot_initializer(shape, dtype=tf.float32):
+    stddev = tf.sqrt(2. / (shape[0] + shape[1]))
+    return tf.random.normal(shape, stddev=stddev, dtype=dtype)
+def my_l1_regularizer(weights):
+    return tf.reduce_sum(tf.abs(0.01 * weights))
+def my_positive_weights(weights): # return value is just tf.nn.relu(weights)
+    return tf.where(weights < 0., tf.zeros_like(weights), weights) 
+layer = keras.layers.Dense(1, activation=my_softplus,
+                           kernel_initializer=my_glorot_initializer,
+                           kernel_regularizer=my_l1_regularizer,
+                           kernel_constraint=my_positive_weights)
+keras.backend.clear_session()
+class MyL1Regularizer(keras.regularizers.Regularizer):
+    def __init__(self, factor):
+        self.factor = factor
+    def __call__(self, weights):
+        return tf.reduce_sum(tf.abs(self.factor * weights))
+    def get_config(self):
+        return {"factor": self.factor}
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation=my_softplus,
+                       kernel_regularizer=MyL1Regularizer(0.01),
+                       kernel_constraint=my_positive_weights,
+                       kernel_initializer=my_glorot_initializer),
+])    
+model.compile(loss="sparse_categorical_crossentropy",
+              optimizer=keras.optimizers.SGD(),
+              metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100,
+                     validation_split=0.1,callbacks=[tensorboard_cb])
+model.save("my_model_with_many_custom_parts.h5")
+model = keras.models.load_model(
+    "my_model_with_many_custom_parts.h5",
+    custom_objects={
+       "MyL1Regularizer": MyL1Regularizer,
+       "my_positive_weights": my_positive_weights,
+       "my_glorot_initializer": my_glorot_initializer,
+       "my_softplus": my_softplus,
+    })
+# Custom metrics
+keras.backend.clear_session()
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    keras.layers.Dense(300, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(100, kernel_initializer="he_normal"),
+    keras.layers.PReLU(),
+    keras.layers.Dense(10, activation="softmax")
+])  
+model.compile(loss="sparse_categorical_crossentropy", optimizer=keras.optimizers.SGD(), metrics=[create_huber(2.0)])
+history = model.fit(avast, housing_labels, epochs=100,
+                     validation_split=0.1,callbacks=[tensorboard_cb])
+model.evaluate(avast_test,y_test)
+class HuberMetric(keras.metrics.Metric):
+    def __init__(self, threshold=1.0, **kwargs):
+        super().__init__(**kwargs) # handles base args (e.g., dtype)
+        self.threshold = threshold
+        #self.huber_fn = create_huber(threshold) # TODO: investigate why this fails
+        self.total = self.add_weight("total", initializer="zeros")
+        self.count = self.add_weight("count", initializer="zeros")
+    def huber_fn(self, y_true, y_pred): # workaround
+        error = y_true - y_pred
+        is_small_error = tf.abs(error) < self.threshold
+        squared_loss = tf.square(error) / 2
+        linear_loss  = self.threshold * tf.abs(error) - self.threshold**2 / 2
+        return tf.where(is_small_error, squared_loss, linear_loss)
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        metric = self.huber_fn(y_true, y_pred)
+        self.total.assign_add(tf.reduce_sum(metric))
+        self.count.assign_add(tf.cast(tf.size(y_true), tf.float32))
+    def result(self):
+        return self.total / self.count
+    def get_config(self):
+        base_config = super().get_config()
+        return {**base_config, "threshold": self.threshold}
+model.compile(loss=create_huber(2.0), optimizer=keras.optimizers.SGD(), metrics=[HuberMetric(2.0)])
+history = model.fit(avast, housing_labels, epochs=100,
+                     validation_split=0.1,callbacks=[tensorboard_cb])
+model.save("my_model_with_a_custom_metric.h5")
+model = keras.models.load_model("my_model_with_a_custom_metric.h5",         
+                         custom_objects={"huber_fn": create_huber(2.0),"HuberMetric": HuberMetric})
+#Custom Layers
+keras.backend.clear_session()
+class MyDense(keras.layers.Layer):
+    def __init__(self, units, activation=None, **kwargs):
+        super().__init__(**kwargs)
+        self.units = units
+        self.activation = keras.activations.get(activation)
+
+    def build(self, batch_input_shape):
+        self.kernel = self.add_weight(
+            name="kernel", shape=[batch_input_shape[-1], self.units],
+            initializer="glorot_normal")
+        self.bias = self.add_weight(
+            name="bias", shape=[self.units], initializer="zeros")
+        super().build(batch_input_shape) # must be at the end
+
+    def call(self, X):
+        return self.activation(X @ self.kernel + self.bias)
+
+    def compute_output_shape(self, batch_input_shape):
+        return tf.TensorShape(batch_input_shape.as_list()[:-1] + [self.units])
+
+    def get_config(self):
+        base_config = super().get_config()
+        return {**base_config, "units": self.units,
+                "activation": keras.activations.serialize(self.activation)}
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109, 109]),
+    MyDense(30, activation="relu"),
+    MyDense(10, activation="softmax")
+])
+
+model.compile(loss="sparse_categorical_crossentropy", optimizer=keras.optimizers.SGD(), metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100,
+                     validation_split=0.1)
+model.evaluate(avast_test,y_test)
+# Custom Models
+class ResidualBlock(keras.layers.Layer):
+    def __init__(self, n_layers, n_neurons, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden = [keras.layers.Dense(n_neurons, activation="elu",
+                                          kernel_initializer="he_normal")
+                       for _ in range(n_layers)]
+
+    def call(self, inputs):
+        Z = inputs
+        for layer in self.hidden:
+            Z = layer(Z)
+        return inputs + Z
+class ResidualClassifier(keras.models.Model):
+    def __init__(self, output_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.flatten1 = keras.layers.Flatten(input_shape=[109,109])
+        self.hidden1 = keras.layers.Dense(300, activation="elu",
+                                          kernel_initializer="he_normal")
+        self.block1 = ResidualBlock(2, 300)
+        self.block2 = ResidualBlock(2, 300)
+        self.out = keras.layers.Dense(output_dim,activation="softmax")
+
+    def call(self, inputs):
+        Z=self.flatten1(inputs)
+        Z = self.hidden1(Z)
+        for _ in range(1 + 3):
+            Z = self.block1(Z)
+        Z = self.block2(Z)
+        
+        return self.out(Z)    
+model = ResidualClassifier(10)    
+model.compile(loss="sparse_categorical_crossentropy", optimizer=keras.optimizers.SGD(), metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100,
+                     validation_split=0.1)
+model.evaluate(avast_test,y_test)
+model.summary()
+# losses and metrics based on model internals [need refinement for classification]
+class ReconstructingRegressor(keras.models.Model):
+    def __init__(self, output_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.flatten1 = keras.layers.Flatten(input_shape=[109,109])
+        self.hidden = [keras.layers.Dense(300, activation="relu",
+                                          kernel_initializer="lecun_normal")
+                       for _ in range(5)]
+        self.out = keras.layers.Dense(output_dim,activation="softmax")
+
+    def build(self, batch_input_shape):
+       
+        n_inputs = batch_input_shape[-1]
+        print(n_inputs)
+        self.reconstruct = keras.layers.Dense(n_inputs)
+        super().build(batch_input_shape)
+
+    def call(self, inputs, training=None):
+        Z=self.flatten1(inputs)
+        
+        for layer in self.hidden:
+            Z = layer(Z)
+         
+        reconstruction = self.reconstruct(Z)
+        recon_loss = tf.reduce_mean(tf.square(reconstruction - inputs))
+        self.add_loss(0.05 * recon_loss)
+        #if training:
+        #    result = self.reconstruction_mean(recon_loss)
+        #    self.add_metric(result)
+        return self.out(Z)
+model = ReconstructingRegressor(10)
+model.compile(loss="sparse_categorical_crossentropy", optimizer=keras.optimizers.SGD(), metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100,validation_split=0.1)  
+model.summary()
+model.layers
+# Computing Gradients Using Autodiff
+
+
+  
