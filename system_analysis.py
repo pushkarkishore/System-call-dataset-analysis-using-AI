@@ -98,6 +98,7 @@ housing_prepared = num_pipeline.fit_transform(housing)
 housing_prepared = pd.DataFrame(housing_prepared)
 housing_prepared_nn = num_pipelines.fit_transform(housing)# neural networks
 housing_prepared_nn = pd.DataFrame(housing_prepared_nn)# neural networks
+
 # Visualize the data
 oecd_bli.plot(kind='scatter', x="666 170 148", y="Types")
 # Select a linear regression model
@@ -423,7 +424,8 @@ def split_dataset(X, y):
     y_5_or_6 = (y == 5) | (y == 6) # sandals or shirts
     y_A = y[~y_5_or_6]
     y_A[y_A > 6] -= 2 # class indices 7, 8, 9 should be moved to 5, 6, 7
-    y_B = (y[y_5_or_6] == 6).astype(np.float32) # binary classification task: is it a shirt (class 6)?
+    y_B = (y[y_5_or_6] == 6).astype(np.float32) # 
+    classification task: is it a shirt (class 6)?
     return ((X[~y_5_or_6], y_A),
             (X[y_5_or_6], y_B))
 (X_train_A, y_train_A), (X_train_B, y_train_B) = split_dataset(avast, housing_labels)
@@ -1071,6 +1073,87 @@ history = model.fit(avast, housing_labels, epochs=100,validation_split=0.1)
 model.summary()
 model.layers
 # Computing Gradients Using Autodiff
+def f(w1, w2):
+    return 3 * w1 ** 2 + 2 * w1 * w2
+w1, w2 = tf.Variable(5.), tf.Variable(3.)
+with tf.GradientTape(persistent=True) as tape:
+    z = f(w1, w2)
+dz_dw1 = tape.gradient(z, w1)
+dz_dw2 = tape.gradient(z, w2) 
+del tape
+c1, c2 = tf.constant(5.), tf.constant(3.)
+with tf.GradientTape() as tape:
+    tape.watch(c1)
+    tape.watch(c2)
+    z= f(c1,c2)
+gradients = tape.gradient(z, [c1, c2])
+def f(w1, w2):
+    return 3 * w1 ** 2 + tf.stop_gradient(2 * w1 * w2)
+with tf.GradientTape() as tape:
+    z = f(w1, w2)
+tape.gradient(z, [w1, w2])
+@tf.custom_gradient
+def my_better_softplus(z):
+    exp = tf.exp(z)
+    def my_softplus_gradients(grad):
+        return grad / (1 + 1 / exp)
+    return tf.math.log(exp + 1), my_softplus_gradients
+def my_better_softplus(z):
+    return tf.where(z > 30., z, tf.math.log(tf.exp(z) + 1.))
+x = tf.Variable([15.])
+with tf.GradientTape() as tape:
+    z = my_better_softplus(x)
+z, tape.gradient(z, [x])
+# Custom Training Loops [shape issue between y_pred and y_batch]
+l2_reg = keras.regularizers.l2(0.05)
+model = keras.models.Sequential([
+    keras.layers.Flatten(input_shape=[109,109]),
+    keras.layers.Dense(30, activation="elu", kernel_initializer="he_normal",
+                       kernel_regularizer=l2_reg),
+    keras.layers.Dense(10,activation="softmax")  
+])
+def random_batch(X, y, batch_size=32):
+    idx = np.random.randint(len(X), size=batch_size) 
+    return X[idx], y[idx]
+def print_status_bar(iteration, total, loss, metrics=None):
+    metrics = " - ".join(["{}: {:.4f}".format(m.name, m.result())
+                         for m in [loss] + (metrics or [])])
+    end = "" if iteration < total else "\n"
+    print("\r{}/{} - ".format(iteration, total) + metrics,
+          end=end)
+
+n_epochs=100
+batch_size = 32
+n_steps = len(avast) // batch_size
+optimizer = keras.optimizers.Nadam(lr=0.01)
+housing_labels = housing_labels.to_numpy()
+metricsAcc = tf.keras.metrics.Accuracy()
+
+for epoch in range(1, n_epochs + 1):
+    print("Epoch {}/{}".format(epoch, n_epochs))
+    for step in range(1, n_steps + 1):
+        X_batch, y_batch = random_batch(avast, housing_labels)
+        
+        with tf.GradientTape() as tape:
+            y_pred= model(X_batch,training=True)
+            loss_values=tf.keras.losses.sparse_categorical_crossentropy(y_batch, y_pred)
+            
+        gradients = tape.gradient(loss_values, model.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+        metricLoss=tf.keras.metrics.sparse_categorical_crossentropy(y_batch, y_pred)
+        metricsAcc.update_state(y_batch,y_pred)
+        readout = 'Epoch {}, Training loss: {}, Training accuracy: {}'
+        print(readout.format(epoch + 1, loss_values,
+                              metricsAcc.result() * 100))
+        metricsAcc.reset_states
+#  Tensorflow functions and graphs
+def cube(x):
+    return x ** 3   
+tf.cube=tf.function(cube)   
+tf.cube(2)  
 
 
-  
+
+    
+
+ 
