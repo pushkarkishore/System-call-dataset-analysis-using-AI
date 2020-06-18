@@ -1,6 +1,7 @@
 import sklearn
 import tensorflow as tf
 from tensorflow import keras
+from sklearn.datasets import load_sample_image
 tf.__version__
 keras.__version__
 import pandas as pd
@@ -1385,9 +1386,105 @@ parsed_context
 parsed_context["title"].values
 parsed_feature_lists
 print(tf.RaggedTensor.from_sparse(parsed_feature_lists["content"]))
-
-
-
+# tensorflow implementation of cnn
+def plot_image(image):
+    plt.imshow(image, cmap="gray", interpolation="nearest")
+    plt.axis("off")
+china = load_sample_image("china.jpg") /255
+flower = load_sample_image("flower.jpg") / 255
+images = np.array([china, flower])
+batch_size, height, width, channels = images.shape
+filters = np.zeros(shape=(7, 7, channels, 2), dtype=np.float32)
+filters[:, :, 0, 0] = 1  # vertical line
+filters[:, :, 0, 1] = 1  # horizontal line
+outputs = tf.nn.conv2d(images, filters, strides=1, padding="SAME")
+for image_index in (0, 1):
+    for feature_map_index in (0, 1):
+        plt.subplot(2, 2, image_index * 2 + feature_map_index + 1)
+        plot_image(outputs[image_index, :, :, feature_map_index])
+# Max pooling in cnn
+max_pool = keras.layers.MaxPool2D(pool_size=2)  
+cropped_images = np.array([crop(image) for image in images], dtype=np.float32)
+output = max_pool(cropped_images)    
+depth_pool = keras.layers.Lambda(lambda X: tf.nn.max_pool(
+    X, ksize=(1, 1, 1, 3), strides=(1, 1, 1, 3), padding="VALID"))
+with tf.device("/cpu:0"): # there is no GPU-kernel yet
+    depth_output = depth_pool(cropped_images)
+depth_output.shape
+for item in depth_output:
+    print(item)
+plt.figure(figsize=(12, 8))
+plt.subplot(1, 2, 1)
+plt.title("Input", fontsize=14)
+plot_color_image(cropped_images[0]) 
+plt.subplot(1, 2, 2)
+plt.title("Output", fontsize=14)
+plot_image(depth_output[0, ..., 0])  # plot the output for the 1st image
+plt.axis("off")
+plt.show() 
+# global average pooling in cnn
+global_avg_pool = keras.layers.GlobalAvgPool2D()
+ouput=global_avg_pool(cropped_images)
+output_global_avg2 = keras.layers.Lambda(lambda X: tf.reduce_mean(X, axis=[1, 2]))
+depth_output= output_global_avg2(cropped_images)
+depth_output.shape
+for item in depth_output:
+    print(item)
+plt.figure(figsize=(12, 8))
+plt.subplot(1, 2, 1)
+plt.title("Input", fontsize=14)
+plot_color_image(cropped_images[1]) 
+plt.subplot(1, 2, 2)
+plt.title("Output", fontsize=14)
+plot_image(output[1])  # plot the output for the 1st image
+plt.axis("off")
+plt.show() 
+# tackling api dataset with cnn [] 
+avast = avast[...,np.newaxis]
+avast_test=avast_test[...,np.newaxis]
+from functools import partial
+DefaultConv2D = partial(keras.layers.Conv2D,
+                        kernel_size=3, activation='relu', padding="SAME")
+model = keras.models.Sequential([
+    DefaultConv2D(filters=64, kernel_size=7, input_shape=[109, 109, 1]),
+    keras.layers.MaxPooling2D(pool_size=2),
+    DefaultConv2D(filters=128),
+    DefaultConv2D(filters=128),
+    keras.layers.MaxPooling2D(pool_size=2),
+    DefaultConv2D(filters=256),
+    DefaultConv2D(filters=256),
+    keras.layers.MaxPooling2D(pool_size=2),
+    keras.layers.Flatten(),
+    keras.layers.Dense(units=128, activation='relu'),
+    keras.layers.Dropout(0.5),
+    keras.layers.Dense(units=64, activation='relu'),
+    keras.layers.Dropout(0.5),
+    keras.layers.Dense(units=10, activation='softmax'),
+])
+model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam", metrics=["accuracy"])
+history = model.fit(avast, housing_labels, epochs=100, validation_split=0.1)
+score = model.evaluate(avast_test, y_test)
+# lenet5  (accuracy-61%)
+model = keras.models.Sequential()
+model.add(keras.layers.Conv2D(filters = 6, 
+                 kernel_size = 5, 
+                 strides = 1, 
+                 activation = 'relu', 
+                 input_shape = (109,109,1)))
+model.add(keras.layers.MaxPooling2D(pool_size = 2, strides = 2))
+model.add(keras.layers.Conv2D(filters = 16, 
+                 kernel_size = 5, 
+                 strides = 1, 
+                 activation = 'relu'))
+model.add(keras.layers.MaxPooling2D(pool_size = 2, strides = 2)).
+model.add(keras.layers.Flatten())
+model.add(keras.layers.Dense(units = 120, activation = 'relu'))
+model.add(keras.layers.Dense(units = 84, activation = 'relu'))
+model.add(keras.layers.Dense(units = 10, activation = 'softmax'))
+model.summary()
+model.compile(optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])
+history = model.fit(avast, housing_labels, epochs=10, validation_split=0.1)
+score = model.predict(avast_test)
 
 
 
