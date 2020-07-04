@@ -13,7 +13,9 @@ import sklearn.linear_model
 import os
 import hashlib
 import matplotlib as mpl
+
 from sklearn.model_selection import train_test_split
+from keras_preprocessing import image
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import StratifiedShuffleSplit
 from pandas.plotting import scatter_matrix
@@ -39,6 +41,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import Perceptron
 from scipy.stats import reciprocal
 from sklearn.model_selection import RandomizedSearchCV
+
 import os
 root_logdir = os.path.join(os.curdir, "my_logs")
 def display_scores(scores):
@@ -1476,7 +1479,7 @@ model.add(keras.layers.Conv2D(filters = 16,
                  kernel_size = 5, 
                  strides = 1, 
                  activation = 'relu'))
-model.add(keras.layers.MaxPooling2D(pool_size = 2, strides = 2)).
+model.add(keras.layers.MaxPooling2D(pool_size = 2, strides = 2))
 model.add(keras.layers.Flatten())
 model.add(keras.layers.Dense(units = 120, activation = 'relu'))
 model.add(keras.layers.Dense(units = 84, activation = 'relu'))
@@ -1485,7 +1488,44 @@ model.summary()
 model.compile(optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])
 history = model.fit(avast, housing_labels, epochs=10, validation_split=0.1)
 score = model.predict(avast_test)
-
+#Alexnet (accuracy-50%, may increase for higher iterations)
+keras.backend.clear_session()
+model = keras.models.Sequential()
+model.add(keras.layers.Conv2D(filters = 96, 
+                 kernel_size = 11, 
+                 strides = 4,  
+                 input_shape = (109,109,1)))
+model.add(keras.layers.MaxPooling2D(pool_size = 3, strides = 2))
+model.add(keras.layers.Conv2D(filters = 256, 
+                 kernel_size = 5, 
+                 strides = 1
+                 ))
+model.add(keras.layers.MaxPooling2D(pool_size = 3, strides = 2))
+model.add(keras.layers.Conv2D(filters = 384, 
+                 kernel_size = 3, 
+                 strides = 1,  
+                 padding='same',
+                 activation = 'relu'))
+model.add(keras.layers.Conv2D(filters = 384, 
+                 kernel_size = 3, 
+                 strides = 1,  
+                 padding='same',
+                 activation = 'relu'
+                 ))
+model.add(keras.layers.Conv2D(filters = 256, 
+                 kernel_size = 3, 
+                 strides = 1,  
+                 padding='same',
+                 activation = 'relu'
+                 ))
+model.add(keras.layers.Flatten())
+model.add(keras.layers.Dense(units = 4096, activation = 'relu'))
+model.add(keras.layers.Dense(units = 4096, activation = 'relu'))
+model.add(keras.layers.Dense(units = 10, activation = 'softmax'))
+model.summary()
+model.compile(optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])
+history = model.fit(avast, housing_labels, epochs=10, validation_split=0.1)
+score = model.predict(avast_test)
 
 
 
