@@ -207,14 +207,14 @@ for train_index, test_index in split.split(api_calls,api_calls["Types"]):
     strat_test_set = api_calls.loc[test_index]
 housing = strat_train_set.copy()    
 housing = strat_train_set.drop("Types", axis=1) 
-avast = housing_prepared_nn.values.reshape((5685, 109, 109))# neural networks
+avast = housing_prepared_nn.values.reshape((6476, 109, 109))# neural networks
 housing_labels = strat_train_set["Types"].copy()
 X_test = strat_test_set.drop("Types", axis=1)
 housing_prepared_test_reg = num_pipeline.fit_transform(X_test)# neural networks
 housing_prepared_test_reg = pd.DataFrame(housing_prepared_test_reg)# neural networks
 housing_prepared_test = num_pipelines.fit_transform(X_test)# neural networks
 housing_prepared_test = pd.DataFrame(housing_prepared_test)# neural networks
-avast_test = housing_prepared_test.values.reshape((1422, 109, 109))# neural networks
+avast_test = housing_prepared_test.values.reshape((1619, 109, 109))# neural networks
 y_test = strat_test_set["Types"].copy()
 # sequential classification API neural network
 model = keras.models.Sequential()
@@ -1483,11 +1483,11 @@ model.add(keras.layers.MaxPooling2D(pool_size = 2, strides = 2))
 model.add(keras.layers.Flatten())
 model.add(keras.layers.Dense(units = 120, activation = 'relu'))
 model.add(keras.layers.Dense(units = 84, activation = 'relu'))
-model.add(keras.layers.Dense(units = 10, activation = 'softmax'))
+model.add(keras.layers.Dense(units = 16, activation = 'softmax'))
 model.summary()
 model.compile(optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])
 history = model.fit(avast, housing_labels, epochs=10, validation_split=0.1)
-score = model.predict(avast_test)
+score = model.evaluate(avast_test,y_test)
 #Alexnet (accuracy-50%, may increase for higher iterations)
 keras.backend.clear_session()
 model = keras.models.Sequential()
@@ -1653,3 +1653,50 @@ loss3_classifier_act = Activation('softmax', name='prob')(loss3_classifier)
 googlenet = Model(inputs=input, outputs=[loss3_classifier_act])
 googlenet.compile(optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])
 history = googlenet.fit(avast, housing_labels, epochs=10, validation_split=0.1)
+# resnet (48% accuracy,  may inecrease upon iterations)
+keras.backend.clear_session()
+from keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout, Input, Add, BatchNormalization, Activation
+from keras.initializers import glorot_uniform
+from keras.optimizers import Adadelta
+def res_block(x, filters):
+    bn1 = BatchNormalization()(x)
+    act1 = Activation('relu')(bn1)
+    conv1 = Conv2D(filters=filters, kernel_size=(3, 3), data_format='channels_first', strides=(2, 2), padding='same', 
+                   kernel_initializer=glorot_uniform(seed=0))(act1)
+    print('conv1.shape', conv1.shape)
+    bn2 = BatchNormalization()(conv1)
+    act2 = Activation('relu')(bn2)
+    conv2 = Conv2D(filters=filters, kernel_size=(3, 3), data_format='channels_first', strides=(1, 1), padding='same', 
+                   kernel_initializer=glorot_uniform(seed=0))(act2)
+    print('conv2.shape', conv2.shape)
+    residual = Conv2D(1, (1, 1), strides=(1, 1), data_format='channels_first')(conv2)
+    
+    
+    x = Conv2D(filters=filters, kernel_size=(3, 3), data_format='channels_first', strides=(2, 2), padding='same', 
+                   kernel_initializer=glorot_uniform(seed=0))(x)
+    print('x.shape', x.shape)
+    out = Add()([x, residual])
+    
+    return out
+input = Input(shape=(109,109,1))
+res1 = res_block(input, 64)
+print('---------block 1 end-----------')
+res2 = res_block(res1, 128)
+print('---------block 2 end-----------')
+res3 = res_block(res2, 256)
+print('---------block 3 end-----------')
+res4 = res_block(res3, 512)
+print('---------block 4 end-----------')
+act1 = Activation('relu')(res4)
+flatten1 = Flatten()(act1)
+dense1 = Dense(512)(flatten1)
+act2 = Activation('relu')(dense1)
+dense2 = Dense(16)(act2)
+output1 = Activation('softmax')(dense2)
+model = Model(inputs=input, outputs=output1)
+model.compile(loss='sparse_categorical_crossentropy',
+              optimizer=Adadelta(lr=0.01),
+              metrics = ['accuracy'])
+model.summary()
+history = model.fit(avast, housing_labels, epochs=50, validation_split=0.1)
+score = model.evaluate(avast_test, y_test)
